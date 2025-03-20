@@ -19,6 +19,32 @@ app = Flask(__name__, template_folder='templates')
 # 本番環境では環境変数からSECRET_KEYを取得
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
+# サーバーサイドカウンター用設定
+COUNTER_FILE = "counter.txt"
+
+def read_counter():
+    if not os.path.exists(COUNTER_FILE):
+        with open(COUNTER_FILE, "w") as f:
+            f.write("0")
+        return 0
+    with open(COUNTER_FILE, "r") as f:
+        count_str = f.read().strip()
+    try:
+        return int(count_str)
+    except ValueError:
+        return 0
+
+def write_counter(count):
+    with open(COUNTER_FILE, "w") as f:
+        f.write(str(count))
+
+@app.route('/counter')
+def counter():
+    count = read_counter()
+    count += 1
+    write_counter(count)
+    return f"このサイトの訪問回数: {count}回"
+
 # 日本語フォントの設定
 font_path = 'C:/Windows/Fonts/msgothic.ttc'
 try:
@@ -820,8 +846,7 @@ def simulate():
             for column_cells in worksheet.columns:
                 length = max(len(str(cell.value)) for cell in column_cells)
                 worksheet.column_dimensions[column_cells[0].column_letter].width = max(length + 2, 15)
-            # 収入合計：青、年間手取り：薄い青、支出合計：ピンク
-            # 年間貯蓄：イエロー、資産額：グリーン
+            # 各セルの背景色と、条件により文字色を設定
             for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row):
                 if row[0].value == "収入合計":
                     for cell in row:
