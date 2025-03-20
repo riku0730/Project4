@@ -1,0 +1,310 @@
+<!-- templates/result.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>理想生活費シミュレーション結果</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        table, th, td {
+            border: 1px solid #aaa;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .button {
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .flash-message {
+            color: red;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .download-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #2196F3;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .download-button:hover {
+            background-color: #0b7dda;
+        }
+    </style>
+</head>
+<body>
+    <h1>理想生活費シミュレーション結果</h1>
+
+    <!-- 概要セクション -->
+    <div class="section">
+        <h2>概要</h2>
+        <p><strong>理想の年間生活費:</strong> {{ ideal_living_expense }} 万円</p>
+        <p><strong>資産ピーク:</strong> {{ peak_age }} 歳時点で {{ peak_asset }} 万円</p>
+    </div>
+
+    <!-- 資産推移グラフ -->
+    <div class="section">
+        <h2>資産推移グラフ</h2>
+        <div>
+            {{ graph_div|safe }}
+        </div>
+    </div>
+
+    <!-- 年度別収支グラフ -->
+    <div class="section">
+        <h2>年度別収支グラフ</h2>
+        <div>
+            {{ bar_div|safe }}
+        </div>
+    </div>
+
+    <!-- 新規追加：年度別収支詳細閲覧ボタン -->
+    <div class="section">
+        <a href="{{ url_for('detailed_breakdown') }}" class="button">年度別収支詳細を閲覧する</a>
+    </div>
+
+    <!-- 保険の管理セクション -->
+    <div class="section">
+        <h2>保険の管理</h2>
+        <a href="{{ url_for('manage', data_type='insurance') }}" class="button">保険を追加</a>
+        <h3>現在の保険</h3>
+        {% if insurances %}
+            <table>
+                <tr>
+                    <th>#</th>
+                    <th>加入年齢</th>
+                    <th>保険料 (万円)</th>
+                    <th>解約返戻金の形式</th>
+                    <th>解約返戻金詳細</th>
+                    <th>操作</th>
+                </tr>
+                {% for insurance in insurances %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ insurance.joining_age }}歳</td>
+                    <td>{{ insurance.premium }} 万円</td>
+                    <td>
+                        {% if insurance.surrender_type == 'lump_sum' %}
+                            一括
+                        {% elif insurance.surrender_type == 'annuity' %}
+                            年金形式
+                        {% elif insurance.surrender_type == 'none' %}
+                            なし
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if insurance.surrender_type == 'lump_sum' %}
+                            年齢{{ insurance.surrender_details.surrender_age }}歳で{{ insurance.surrender_details.surrender_amount }}万円
+                        {% elif insurance.surrender_type == 'annuity' %}
+                            年齢{{ insurance.surrender_details.annuity_start_age }}歳から{{ insurance.surrender_details.annuity_end_age }}歳まで毎年{{ insurance.surrender_details.annuity_amount }}万円
+                        {% elif insurance.surrender_type == 'none' %}
+                            なし
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('manage', data_type='insurance', index=loop.index0) }}" class="button">編集</a>
+                        <form action="{{ url_for('delete', data_type='insurance', index=loop.index0) }}" method="post" style="display:inline;">
+                            <button type="submit" class="button" style="background-color:#f44336;">削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>保険はありません。</p>
+        {% endif %}
+    </div>
+
+    <!-- 特別支出の管理セクション -->
+    <div class="section">
+        <h2>特別支出の管理</h2>
+        <a href="{{ url_for('manage', data_type='special_expense') }}" class="button">特別支出を追加</a>
+        <h3>現在の特別支出</h3>
+        {% if special_expenses %}
+            <table>
+                <tr>
+                    <th>#</th>
+                    <th>支出名</th>
+                    <th>支出タイプ</th>
+                    <th>詳細</th>
+                    <th>操作</th>
+                </tr>
+                {% for expense in special_expenses %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ expense.name }}</td>
+                    <td>
+                        {% if expense.type == 'single' %}
+                            単発支出
+                        {% elif expense.type == 'recurring' %}
+                            定期支出
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if expense.type == 'single' %}
+                            年齢{{ expense.age }}歳で{{ expense.amount }}万円
+                        {% elif expense.type == 'recurring' %}
+                            年齢{{ expense.start_age }}歳から{{ expense.end_age }}歳まで、{{ expense.interval }}年ごとに{{ expense.amount }}万円
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('manage', data_type='special_expense', index=loop.index0) }}" class="button">編集</a>
+                        <form action="{{ url_for('delete', data_type='special_expense', index=loop.index0) }}" method="post" style="display:inline;">
+                            <button type="submit" class="button" style="background-color:#f44336;">削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>特別支出はありません。</p>
+        {% endif %}
+    </div>
+
+    <!-- 特別収入の管理セクション -->
+    <div class="section">
+        <h2>特別収入の管理</h2>
+        <a href="{{ url_for('manage', data_type='special_income') }}" class="button">特別収入を追加</a>
+        <h3>現在の特別収入</h3>
+        {% if special_incomes %}
+            <table>
+                <tr>
+                    <th>#</th>
+                    <th>収入名</th>
+                    <th>収入タイプ</th>
+                    <th>詳細</th>
+                    <th>操作</th>
+                </tr>
+                {% for income_item in special_incomes %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ income_item.name }}</td>
+                    <td>
+                        {% if income_item.type == 'single' %}
+                            単発収入
+                        {% elif income_item.type == 'recurring' %}
+                            定期収入
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if income_item.type == 'single' %}
+                            年齢{{ income_item.age }}歳で{{ income_item.amount }}万円
+                        {% elif income_item.type == 'recurring' %}
+                            年齢{{ income_item.start_age }}歳から{{ income_item.end_age }}歳まで、{{ income_item.interval }}年ごとに{{ income_item.amount }}万円
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('manage', data_type='special_income', index=loop.index0) }}" class="button">編集</a>
+                        <form action="{{ url_for('delete', data_type='special_income', index=loop.index0) }}" method="post" style="display:inline;">
+                            <button type="submit" class="button" style="background-color:#f44336;">削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>特別収入はありません。</p>
+        {% endif %}
+    </div>
+
+    <!-- 住宅変更の管理セクション -->
+    <div class="section">
+        <h2>住宅変更の管理</h2>
+        <a href="{{ url_for('manage', data_type='housing_change') }}" class="button">住宅変更を追加</a>
+        <h3>現在の住宅変更</h3>
+        {% if housing_changes %}
+            <table>
+                <tr>
+                    <th>#</th>
+                    <th>変更年齢</th>
+                    <th>住宅タイプ</th>
+                    <th>詳細</th>
+                    <th>操作</th>
+                </tr>
+                {% for change in housing_changes %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ change.change_age }}歳</td>
+                    <td>{{ change.housing_type }}</td>
+                    <td>
+                        {% if change.housing_type in ['賃貸', 'その他'] %}
+                            年間住居費: {{ change.annual_cost }} 万円<br>
+                        {% elif change.housing_type == '購入' %}
+                            物件価格: {{ change.property_price }} 万円<br>
+                            頭金: {{ change.down_payment }} 万円<br>
+                            ローン年数: {{ change.loan_years }} 年<br>
+                            ローン金利: {{ change.loan_interest_rate }}%<br>
+                            その他年間費用: {{ change.other_annual_cost }} 万円<br>
+                        {% endif %}
+                        売却益: {{ change.selling_profit }} 万円<br>
+                        諸費用: {{ change.misc_costs }} 万円
+                    </td>
+                    <td>
+                        <a href="{{ url_for('manage', data_type='housing_change', index=loop.index0) }}" class="button">編集</a>
+                        <form action="{{ url_for('delete', data_type='housing_change', index=loop.index0) }}" method="post" style="display:inline;">
+                            <button type="submit" class="button" style="background-color:#f44336;">削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>住宅変更はありません。</p>
+        {% endif %}
+    </div>
+
+    <!-- 結果のダウンロードセクション -->
+    <div class="section">
+        <h2>結果のダウンロード</h2>
+        <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_data }}" download="simulation_result.xlsx" class="download-button">Excelファイルをダウンロード</a>
+    </div>
+
+    <!-- 編集画面へのリンク -->
+    <div class="section">
+        <a href="{{ url_for('edit') }}" class="button">入力情報を編集する</a>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-message">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- シミュレーションに戻るボタン -->
+    <div>
+        <a href="{{ url_for('simulate') }}" class="button">シミュレーションに戻る</a>
+    </div>
+</body>
+</html>

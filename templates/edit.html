@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>入力情報の編集</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      input[disabled] {
+          background-color: #e9ecef;
+      }
+      .retirement-row {
+          margin-bottom: 8px;
+      }
+      .retirement-row input {
+          display: inline-block;
+          width: 150px;
+          margin-right: 5px;
+      }
+    </style>
+    <script>
+      function goToIncomeDetail() {
+          document.getElementById('incomeDetailForm').submit();
+      }
+
+      // 退職金入力欄の表示/非表示を切り替え
+      function toggleRetirementFields() {
+        var noneRadio = document.getElementById('edit_retirement_none');
+        var container = document.getElementById('edit_retirement_container');
+        if (noneRadio.checked) {
+          container.style.display = 'none';
+        } else {
+          container.style.display = 'block';
+        }
+      }
+
+      // 行を追加
+      function addRetirementRow() {
+        var list = document.getElementById('edit_retirement_list');
+        var row = document.createElement('div');
+        row.className = 'retirement-row';
+        row.innerHTML = `
+          <input type="number" class="form-control d-inline-block" name="edit_retirement_age[]" placeholder="受給年齢">
+          <input type="number" class="form-control d-inline-block" name="edit_retirement_amount[]" placeholder="退職金額(万円)">
+          <button type="button" class="btn btn-danger btn-sm delete-retirement-btn">削除</button>
+        `;
+        list.appendChild(row);
+
+        // 削除ボタンのイベント
+        var deleteBtn = row.querySelector('.delete-retirement-btn');
+        deleteBtn.addEventListener('click', function(){
+          row.remove();
+        });
+      }
+
+      window.addEventListener('DOMContentLoaded', function() {
+        // 退職金ラジオボタンのイベント
+        document.getElementById('edit_retirement_none').addEventListener('change', toggleRetirementFields);
+        document.getElementById('edit_retirement_yes').addEventListener('change', toggleRetirementFields);
+        toggleRetirementFields();
+
+        // 追加ボタン
+        var addBtn = document.getElementById('edit_add_retirement_btn');
+        if (addBtn) {
+          addBtn.addEventListener('click', function(){
+            addRetirementRow();
+          });
+        }
+
+        // 既存の削除ボタンにイベント付与（初期表示分）
+        var deleteBtns = document.querySelectorAll('.delete-retirement-btn');
+        deleteBtns.forEach(function(btn){
+          btn.addEventListener('click', function(){
+            btn.parentNode.remove();
+          });
+        });
+      });
+    </script>
+</head>
+<body>
+<div class="container mt-5">
+    <h1>入力情報の編集</h1>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-danger">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <form action="{{ url_for('edit') }}" method="post">
+        <!-- Step1: 基本情報 -->
+        <h2>基本情報</h2>
+        <div class="mb-3">
+            <label for="age" class="form-label">現在の年齢:</label>
+            <input type="number" class="form-control" id="age" name="age" value="{{ session.get('age') }}" disabled>
+        </div>
+        <div class="mb-3">
+            <label for="savings" class="form-label">現在の貯蓄額(万円):</label>
+            <input type="number" class="form-control" id="savings" name="savings" value="{{ session.get('savings', '') }}" required>
+        </div>
+        
+        <!-- Step2: 住宅情報 -->
+        <h2>住宅情報</h2>
+        <div class="mb-3">
+            <label for="housing_status" class="form-label">現在の住まい:</label>
+            <select class="form-select" id="housing_status" name="housing_status" required>
+                <option value="" {% if not session.get('housing_status') %}selected{% endif %}>選択してください</option>
+                <option value="賃貸" {% if session.get('housing_status') == '賃貸' %}selected{% endif %}>賃貸</option>
+                <option value="住宅ローン" {% if session.get('housing_status') == '住宅ローン' %}selected{% endif %}>住宅ローン</option>
+                <option value="その他" {% if session.get('housing_status') == 'その他' %}selected{% endif %}>その他</option>
+            </select>
+        </div>
+        <div id="rent_container" class="mb-3" style="display: {% if session.get('housing_status') in ['賃貸','その他'] %}block{% else %}none{% endif %};">
+            <label for="rent" class="form-label">年間住居費(万円):</label>
+            <input type="number" class="form-control" id="rent" name="rent" value="{{ session.get('rent', '') }}">
+        </div>
+        <div id="loan_container" style="display: {% if session.get('housing_status') == '住宅ローン' %}block{% else %}none{% endif %};">
+            <div class="mb-3">
+                <label for="loan_amount" class="form-label">ローンの年間支払額(万円):</label>
+                <input type="number" class="form-control" id="loan_amount" name="loan_amount" value="{{ session.get('loan_amount', '') }}">
+            </div>
+            <div class="mb-3">
+                <label for="loan_years" class="form-label">ローンの残り年数:</label>
+                <input type="number" class="form-control" id="loan_years" name="loan_years" value="{{ session.get('loan_years', '') }}">
+            </div>
+            <div class="mb-3">
+                <label for="housing_expenses" class="form-label">年間住宅関連費用(万円):</label>
+                <input type="number" class="form-control" id="housing_expenses" name="housing_expenses" value="{{ session.get('housing_expenses', '') }}">
+            </div>
+        </div>
+        
+        <!-- Step3: 収入情報 -->
+        <h2>収入情報</h2>
+        <div class="mb-3">
+            <label for="employment_type" class="form-label">現在の働き方:</label>
+            <select class="form-select" id="employment_type" name="employment_type" disabled>
+                <option value="company" {% if session.get('employment_type') == 'company' %}selected{% endif %}>会社員・公務員</option>
+                <option value="self" {% if session.get('employment_type') != 'company' and session.get('employment_type') %}selected{% endif %}>自営業・その他</option>
+            </select>
+            <!-- Hidden input for employment_type -->
+            <input type="hidden" name="employment_type" value="{{ session.get('employment_type') }}">
+        </div>
+        {% if session.get('employment_type') == 'company' %}
+        <div id="company_fields">
+            <div class="mb-3">
+                <label for="company_income" class="form-label">現在の年収(万円):</label>
+                <input type="number" class="form-control" id="company_income" name="company_income" value="{{ session.get('current_income', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="company_retirement_age" class="form-label">退職年齢:</label>
+                <input type="number" class="form-control" id="company_retirement_age" name="company_retirement_age" value="{{ session.get('retirement_age', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="company_peak_income" class="form-label">収入ピーク時の年収(万円):</label>
+                <input type="number" class="form-control" id="company_peak_income" name="company_peak_income" value="{{ session.get('peak_income', '') }}" required>
+            </div>
+        </div>
+        {% else %}
+        <div id="self_fields">
+            <div class="mb-3">
+                <label for="self_income" class="form-label">現在の年間手取り(万円):</label>
+                <input type="number" class="form-control" id="self_income" name="self_income" value="{{ session.get('current_income', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="self_retirement_age" class="form-label">引退年齢:</label>
+                <input type="number" class="form-control" id="self_retirement_age" name="self_retirement_age" value="{{ session.get('retirement_age', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="self_peak_income" class="form-label">収入ピーク時の年間手取り(万円):</label>
+                <input type="number" class="form-control" id="self_peak_income" name="self_peak_income" value="{{ session.get('peak_income', '') }}" required>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 退職金情報 -->
+        <h2>退職金情報</h2>
+        <div class="mb-3">
+          <label class="form-label">退職金の受給:</label><br>
+          <input type="radio" id="edit_retirement_none" name="edit_retirement_option" value="none"
+            {% if not session.get('retirement_money') or session.get('retirement_money')|length == 0 %}checked{% endif %}>
+          <label for="edit_retirement_none">なし</label>
+
+          <input type="radio" id="edit_retirement_yes" name="edit_retirement_option" value="yes"
+            {% if session.get('retirement_money') and session.get('retirement_money')|length > 0 %}checked{% endif %}>
+          <label for="edit_retirement_yes">あり</label>
+        </div>
+
+        <div id="edit_retirement_container" style="display:none;">
+            <div id="edit_retirement_list">
+                {% if session.get('retirement_money') and session.get('retirement_money')|length > 0 %}
+                  {% for item in session['retirement_money'] %}
+                  <div class="retirement-row">
+                    <input type="number" class="form-control d-inline-block" name="edit_retirement_age[]" placeholder="受給年齢" value="{{ item.age }}">
+                    <input type="number" class="form-control d-inline-block" name="edit_retirement_amount[]" placeholder="退職金額(万円)" value="{{ item.amount }}">
+                    <button type="button" class="btn btn-danger btn-sm delete-retirement-btn">削除</button>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <!-- デフォルト1行だけ -->
+                  <div class="retirement-row">
+                    <input type="number" class="form-control d-inline-block" name="edit_retirement_age[]" placeholder="受給年齢">
+                    <input type="number" class="form-control d-inline-block" name="edit_retirement_amount[]" placeholder="退職金額(万円)">
+                    <button type="button" class="btn btn-danger btn-sm delete-retirement-btn">削除</button>
+                  </div>
+                {% endif %}
+            </div>
+            <button type="button" class="btn btn-secondary" id="edit_add_retirement_btn">追加</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary">編集を反映する</button>
+        <a href="{{ url_for('simulate') }}" class="btn btn-secondary">シミュレーションを実行</a>
+    </form>
+    
+    <hr>
+    <!-- 収入変動詳細入力へ ボタン -->
+    <form id="incomeDetailForm" action="{{ url_for('income_detail') }}?return=edit" method="get">
+        <input type="hidden" name="dummy" value="dummy">
+        <!-- Hidden input for employment_type to be passed -->
+        <input type="hidden" name="employment_type" value="{{ session.get('employment_type') }}">
+        <button type="submit" class="btn btn-info">収入変動詳細を入力へ</button>
+    </form>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.getElementById('housing_status').addEventListener('change', function() {
+        var status = this.value;
+        document.getElementById('rent_container').style.display = (status === '賃貸' || status === 'その他') ? 'block' : 'none';
+        document.getElementById('loan_container').style.display = (status === '住宅ローン') ? 'block' : 'none';
+    });
+</script>
+</body>
+</html>

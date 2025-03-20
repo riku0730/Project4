@@ -1,0 +1,63 @@
+<!-- templates/step2.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ヒアリング - 住宅情報</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container mt-5">
+    <h1 class="mb-4">住宅情報の入力</h1>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-danger">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <form action="/step2" method="post">
+      <div class="mb-3">
+        <label for="housing_status" class="form-label">現在の住まい:</label>
+        <select class="form-select" id="housing_status" name="housing_status" required onchange="toggleHousingInputs()">
+          <option value="" selected>選択してください</option>
+          <option value="賃貸">賃貸</option>
+          <option value="住宅ローン">住宅ローン</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div id="rent_container" class="mb-3" style="display: none;">
+        <label for="rent" class="form-label">年間住居費(万円):</label>
+        <input type="number" class="form-control" id="rent" name="rent" min="0">
+      </div>
+      <div id="loan_container" style="display: none;">
+        <div class="mb-3">
+          <label for="loan_amount" class="form-label">ローンの年間支払額(万円):</label>
+          <input type="number" class="form-control" id="loan_amount" name="loan_amount" min="0">
+        </div>
+        <div class="mb-3">
+          <label for="loan_years" class="form-label">ローンの残り年数:</label>
+          <input type="number" class="form-control" id="loan_years" name="loan_years" min="1">
+        </div>
+        <div class="mb-3">
+          <label for="housing_expenses" class="form-label">年間住宅関連費用(万円):</label>
+          <input type="number" class="form-control" id="housing_expenses" name="housing_expenses" min="0">
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" onclick="window.history.back()">戻る</button>
+      <button type="submit" class="btn btn-primary">次へ</button>
+    </form>
+  </div>
+  <script>
+    function toggleHousingInputs() {
+      const status = document.getElementById('housing_status').value;
+      document.getElementById('rent_container').style.display = (status === '賃貸' || status === 'その他') ? 'block' : 'none';
+      document.getElementById('loan_container').style.display = (status === '住宅ローン') ? 'block' : 'none';
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!-- templates/manage.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>データの管理</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        label {
+            display: inline-block;
+            width: 200px;
+            text-align: right;
+            margin-right: 10px;
+        }
+        input, select {
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        .flash-message {
+            color: red;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+    </style>
+    <script>
+        // 保険の解約返戻金形式に応じて入力フィールドを表示・非表示にするスクリプト
+        function toggleSurrenderFields() {
+            var type = document.getElementById('surrender_type').value;
+            document.getElementById('lump_sum_fields').style.display = (type === 'lump_sum') ? 'block' : 'none';
+            document.getElementById('annuity_fields').style.display = (type === 'annuity') ? 'block' : 'none';
+            document.getElementById('none_fields').style.display = (type === 'none') ? 'block' : 'none';
+        }
+
+        // 支出タイプに応じて入力フィールドを表示・非表示にするスクリプト
+        function toggleExpenseFields() {
+            var type = document.getElementById('expense_type').value;
+            document.getElementById('single_expense_fields').style.display = (type === 'single') ? 'block' : 'none';
+            document.getElementById('recurring_expense_fields').style.display = (type === 'recurring') ? 'block' : 'none';
+        }
+
+        // 収入タイプに応じて入力フィールドを表示・非表示にするスクリプト
+        function toggleIncomeFields() {
+            var type = document.getElementById('income_type').value;
+            document.getElementById('single_income_fields').style.display = (type === 'single') ? 'block' : 'none';
+            document.getElementById('recurring_income_fields').style.display = (type === 'recurring') ? 'block' : 'none';
+        }
+
+        // 住宅変更の入力フィールドを制御するスクリプト
+        function toggleHousingFields() {
+            var type = document.getElementById('housing_type').value;
+            if (type === '') {
+                document.getElementById('rent_other_fields').style.display = 'none';
+                document.getElementById('purchase_fields').style.display = 'none';
+                document.getElementById('selling_misc_fields').style.display = 'none';
+            } else if (type === '賃貸' || type === 'その他') {
+                document.getElementById('rent_other_fields').style.display = 'block';
+                document.getElementById('purchase_fields').style.display = 'none';
+                document.getElementById('selling_misc_fields').style.display = 'block';
+            } else if (type === '購入') {
+                document.getElementById('rent_other_fields').style.display = 'none';
+                document.getElementById('purchase_fields').style.display = 'block';
+                document.getElementById('selling_misc_fields').style.display = 'block';
+            }
+        }
+
+        window.onload = function() {
+            var surrenderTypeSelect = document.getElementById('surrender_type');
+            if (surrenderTypeSelect) {
+                surrenderTypeSelect.addEventListener('change', toggleSurrenderFields);
+                toggleSurrenderFields();
+            }
+            var expenseTypeSelect = document.getElementById('expense_type');
+            if (expenseTypeSelect) {
+                expenseTypeSelect.addEventListener('change', toggleExpenseFields);
+                toggleExpenseFields();
+            }
+            var incomeTypeSelect = document.getElementById('income_type');
+            if (incomeTypeSelect) {
+                incomeTypeSelect.addEventListener('change', toggleIncomeFields);
+                toggleIncomeFields();
+            }
+            var housingTypeSelect = document.getElementById('housing_type');
+            if (housingTypeSelect) {
+                housingTypeSelect.addEventListener('change', toggleHousingFields);
+                toggleHousingFields();
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>データの管理</h1>
+
+    {% if data_type == 'insurance' %}
+    <div class="section">
+        <h2>{% if index is not none %}保険の編集{% else %}保険の追加{% endif %}</h2>
+        <form action="{{ url_for('manage', data_type='insurance', index=index) }}" method="post">
+            <label for="joining_age">加入年齢:</label>
+            <input type="number" id="joining_age" name="joining_age" value="{{ data.joining_age if data else current_age }}" required
+                   onfocus="if(this.value==this.defaultValue) { this.value=''; }" 
+                   onblur="if(this.value=='') { this.value=this.defaultValue; }"><br><br>
+            
+            <label for="payment_end_age">保険料払込終了年齢:</label>
+            <input type="number" id="payment_end_age" name="payment_end_age" value="{{ data.payment_end_age if data else '' }}" required><br><br>
+            
+            <label for="premium">保険料 (万円):</label>
+            <input type="number" id="premium" name="premium" value="{{ data.premium if data else '' }}" required><br><br>
+            
+            <label for="surrender_type">解約返戻金の形式:</label>
+            <select id="surrender_type" name="surrender_type" required>
+                <option value="">選択してください</option>
+                <option value="lump_sum" {% if data and data.surrender_type == 'lump_sum' %}selected{% endif %}>一括</option>
+                <option value="annuity" {% if data and data.surrender_type == 'annuity' %}selected{% endif %}>年金形式</option>
+                <option value="none" {% if data and data.surrender_type == 'none' %}selected{% endif %}>なし</option>
+            </select><br><br>
+            
+            <!-- 一括解約返戻金 -->
+            <div id="lump_sum_fields" style="display:none;">
+                <label for="surrender_age">解約返戻金受取年齢:</label>
+                <input type="number" id="surrender_age" name="surrender_age" value="{{ data.surrender_details.surrender_age if data and data.surrender_type == 'lump_sum' else '' }}"><br><br>
+                
+                <label for="surrender_amount">解約返戻金額 (万円):</label>
+                <input type="number" id="surrender_amount" name="surrender_amount" value="{{ data.surrender_details.surrender_amount if data and data.surrender_type == 'lump_sum' else '' }}"><br><br>
+            </div>
+            
+            <!-- 年金形式解約返戻金 -->
+            <div id="annuity_fields" style="display:none;">
+                <label for="annuity_start_age">年金受取開始年齢:</label>
+                <input type="number" id="annuity_start_age" name="annuity_start_age" value="{{ data.surrender_details.annuity_start_age if data and data.surrender_type == 'annuity' else '' }}"><br><br>
+                
+                <label for="annuity_end_age">年金受取終了年齢:</label>
+                <input type="number" id="annuity_end_age" name="annuity_end_age" value="{{ data.surrender_details.annuity_end_age if data and data.surrender_type == 'annuity' else '' }}"><br><br>
+                
+                <label for="annuity_amount">年金受取額 (万円):</label>
+                <input type="number" id="annuity_amount" name="annuity_amount" value="{{ data.surrender_details.annuity_amount if data and data.surrender_type == 'annuity' else '' }}"><br><br>
+            </div>
+
+            <!-- なしの解約返戻金 -->
+            <div id="none_fields" style="display:none;">
+                <p>解約返戻金はありません。</p>
+            </div>
+            
+            <input type="submit" value="{% if index is not none %}保険を更新{% else %}保険を追加{% endif %}">
+        </form>
+    </div>
+    {% endif %}
+
+    {% if data_type == 'special_expense' %}
+    <div class="section">
+        <h2>{% if index is not none %}特別支出の編集{% else %}特別支出の追加{% endif %}</h2>
+        <form action="{{ url_for('manage', data_type='special_expense', index=index) }}" method="post">
+            <label for="expense_name">支出名:</label>
+            <input type="text" id="expense_name" name="expense_name" value="{{ data.name if data else '' }}" required><br><br>
+            
+            <label for="expense_type">支出タイプ:</label>
+            <select id="expense_type" name="expense_type" required>
+                <option value="">選択してください</option>
+                <option value="single" {% if data and data.type == 'single' %}selected{% endif %}>単発支出</option>
+                <option value="recurring" {% if data and data.type == 'recurring' %}selected{% endif %}>定期支出</option>
+            </select><br><br>
+            
+            <!-- 単発支出 -->
+            <div id="single_expense_fields" style="display:none;">
+                <label for="age">支出年齢:</label>
+                <input type="number" id="age" name="age" value="{{ data.age if data and data.type == 'single' else '' }}"><br><br>
+                
+                <label for="amount">支出金額 (万円):</label>
+                <input type="number" id="amount" name="amount" value="{{ data.amount if data and data.type == 'single' else '' }}"><br><br>
+            </div>
+            
+            <!-- 定期支出 -->
+            <div id="recurring_expense_fields" style="display:none;">
+                <label for="start_age">開始年齢:</label>
+                <input type="number" id="start_age" name="start_age" value="{{ data.start_age if data and data.type == 'recurring' else '' }}"><br><br>
+                
+                <label for="end_age">終了年齢:</label>
+                <input type="number" id="end_age" name="end_age" value="{{ data.end_age if data and data.type == 'recurring' else '' }}"><br><br>
+                
+                <label for="amount_recurring">支出金額 (万円):</label>
+                <input type="number" id="amount_recurring" name="amount_recurring" value="{{ data.amount if data and data.type == 'recurring' else '' }}"><br><br>
+                
+                <label for="interval">間隔 (年):</label>
+                <input type="number" id="interval" name="interval" value="{{ data.interval if data and data.type == 'recurring' else '' }}"><br><br>
+            </div>
+            
+            <input type="submit" value="{% if index is not none %}特別支出を更新{% else %}特別支出を追加{% endif %}">
+        </form>
+    </div>
+    {% endif %}
+
+    {% if data_type == 'special_income' %}
+    <div class="section">
+        <h2>{% if index is not none %}特別収入の編集{% else %}特別収入の追加{% endif %}</h2>
+        <form action="{{ url_for('manage', data_type='special_income', index=index) }}" method="post">
+            <label for="income_name">収入名:</label>
+            <input type="text" id="income_name" name="income_name" value="{{ data.name if data else '' }}" required><br><br>
+            
+            <label for="income_type">収入タイプ:</label>
+            <select id="income_type" name="income_type" required>
+                <option value="">選択してください</option>
+                <option value="single" {% if data and data.type == 'single' %}selected{% endif %}>単発収入</option>
+                <option value="recurring" {% if data and data.type == 'recurring' %}selected{% endif %}>定期収入</option>
+            </select><br><br>
+            
+            <!-- 単発収入 -->
+            <div id="single_income_fields" style="display:none;">
+                <label for="age">収入年齢:</label>
+                <input type="number" id="age" name="age" value="{{ data.age if data and data.type == 'single' else '' }}"><br><br>
+                
+                <label for="amount">収入金額 (万円):</label>
+                <input type="number" id="amount" name="amount" value="{{ data.amount if data and data.type == 'single' else '' }}"><br><br>
+            </div>
+            
+            <!-- 定期収入 -->
+            <div id="recurring_income_fields" style="display:none;">
+                <label for="start_age">開始年齢:</label>
+                <input type="number" id="start_age" name="start_age" value="{{ data.start_age if data and data.type == 'recurring' else '' }}"><br><br>
+                
+                <label for="end_age">終了年齢:</label>
+                <input type="number" id="end_age" name="end_age" value="{{ data.end_age if data and data.type == 'recurring' else '' }}"><br><br>
+                
+                <label for="amount_recurring">収入金額 (万円):</label>
+                <input type="number" id="amount_recurring" name="amount_recurring" value="{{ data.amount if data and data.type == 'recurring' else '' }}"><br><br>
+                
+                <label for="interval">間隔 (年):</label>
+                <input type="number" id="interval" name="interval" value="{{ data.interval if data and data.type == 'recurring' else '' }}"><br><br>
+            </div>
+            
+            <input type="submit" value="{% if index is not none %}特別収入を更新{% else %}特別収入を追加{% endif %}">
+        </form>
+    </div>
+    {% endif %}
+
+    {% if data_type == 'housing_change' %}
+    <div class="section">
+        <h2>{% if index is not none %}住宅変更の編集{% else %}住宅変更の追加{% endif %}</h2>
+        <form action="{{ url_for('manage', data_type='housing_change', index=index) }}" method="post">
+            <label for="change_age">変更年齢:</label>
+            <input type="number" id="change_age" name="change_age" value="{{ data.change_age if data else '' }}" required><br><br>
+            
+            <label for="housing_type">住宅タイプ:</label>
+            <select id="housing_type" name="housing_type" required onchange="toggleHousingFields()">
+                <option value="">選択してください</option>
+                <option value="賃貸" {% if data and data.housing_type == '賃貸' %}selected{% endif %}>賃貸</option>
+                <option value="購入" {% if data and data.housing_type == '購入' %}selected{% endif %}>購入</option>
+                <option value="その他" {% if data and data.housing_type == 'その他' %}selected{% endif %}>その他</option>
+            </select><br><br>
+            
+            <!-- 住宅タイプ選択後に表示 -->
+            <div id="rent_other_fields" style="display:none;">
+                <label for="annual_cost">年間住居費 (万円):</label>
+                <input type="number" id="annual_cost" name="annual_cost" value="{{ data.annual_cost if data and data.housing_type in ['賃貸', 'その他'] else '' }}"><br><br>
+            </div>
+            
+            <div id="purchase_fields" style="display:none;">
+                <label for="property_price">物件価格 (万円):</label>
+                <input type="number" id="property_price" name="property_price" value="{{ data.property_price if data and data.housing_type == '購入' else '' }}"><br><br>
+                
+                <label for="down_payment">頭金 (万円):</label>
+                <input type="number" id="down_payment" name="down_payment" value="{{ data.down_payment if data and data.housing_type == '購入' else '' }}"><br><br>
+                
+                <label for="loan_years">ローン年数:</label>
+                <input type="number" id="loan_years" name="loan_years" value="{{ data.loan_years if data and data.housing_type == '購入' else '' }}"><br><br>
+                
+                <label for="loan_interest_rate">ローン金利 (%):</label>
+                <input type="number" step="0.01" id="loan_interest_rate" name="loan_interest_rate" value="{{ data.loan_interest_rate if data and data.housing_type == '購入' else '' }}"><br><br>
+                
+                <label for="other_annual_cost">その他年間費用 (万円):</label>
+                <input type="number" id="other_annual_cost" name="other_annual_cost" value="{{ data.other_annual_cost if data and data.housing_type == '購入' else '' }}"><br><br>
+            </div>
+
+            <!-- 売却益と諸費用は住宅タイプ選択後に表示 -->
+            <div id="selling_misc_fields" style="display:none;">
+                <label for="selling_profit">売却益 (万円):</label>
+                <input type="number" id="selling_profit" name="selling_profit" value="{{ data.selling_profit if data and data.housing_type in ['賃貸','購入','その他'] else '0' }}"
+                       onfocus="if(this.value==this.defaultValue) { this.value=''; }" 
+                       onblur="if(this.value=='') { this.value=this.defaultValue; }"><br><br>
+                
+                <label for="misc_costs">諸費用 (万円):</label>
+                <input type="number" id="misc_costs" name="misc_costs" value="{{ data.misc_costs if data and data.housing_type in ['賃貸','購入','その他'] else '0' }}"
+                       onfocus="if(this.value==this.defaultValue) { this.value=''; }" 
+                       onblur="if(this.value=='') { this.value=this.defaultValue; }"><br><br>
+            </div>
+            
+            <input type="submit" value="{% if index is not none %}住宅変更を更新{% else %}住宅変更を追加{% endif %}">
+        </form>
+    </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-message">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+</body>
+</html>

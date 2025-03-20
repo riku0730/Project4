@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>収入変動シミュレーション</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- d3.js (最新版 v7) -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Plotly のライブラリ -->
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    /* タッチ操作を無効化 */
+    #chart { touch-action: none; }
+  </style>
+</head>
+<body>
+<div class="container mt-5">
+  <h1>収入変動シミュレーション</h1>
+  <p>
+    グラフ上の任意のデータポイント（年齢と年収の交差する丸）をクリックすると、収入調整用モーダルが表示されます。<br>
+    モーダル内では、調整単位（1万円、10万円、100万円）を選び、<br>
+    ・「＋」でその年齢の収入を増加、<br>
+    ・「－」で減少、<br>
+    ・「固定する」でその年齢以降の収入を固定、<br>
+    ・「直線接続」で開始年齢からクリックされた年齢までを直線補間で更新（※直線接続用保存ボタンは削除され、全保存は下部の保存ボタンで統一されます）<br>
+    の4つの操作が可能です。<br>
+    さらに、モーダル下部に働き方切替ボタンがあり、<br>
+    「働き方を会社員・公務員に変更」または「働き方を自営業・その他に変更」を押すと、<br>
+    クリックされたデータポイント以降のマーカーの色が変更され、変更後の情報は保存できます。<br>
+    下部の「反映する」ボタンを押すと、その変更内容が確定され、隠しフィールドに保存されます。
+  </p>
+  <!-- フォーム内で「戻る」と「反映する」ボタン -->
+  <form id="detailForm" method="POST" action="{{ url_for('income_detail_apply') }}">
+    <div id="chart"></div>
+    <!-- 隠しフィールドにカスタム収入データを保存 -->
+    <input type="hidden" id="custom_incomes" name="custom_incomes" value="">
+    <!-- 隠しフィールドに働き方情報を保存 -->
+    <input type="hidden" id="working_style" name="working_style" value="">
+    <br>
+    <a href="{{ url_for('step3') }}" class="btn btn-secondary">戻る</a>
+    <button type="submit" class="btn btn-primary">反映する</button>
+  </form>
+</div>
+
+<!-- Bootstrap Modal: 収入調整用 -->
+<div class="modal fade" id="adjustModal" tabindex="-1" aria-labelledby="adjustModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="adjustModalLabel">収入を調整</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+      </div>
+      <div class="modal-body">
+        <!-- 選択されたデータポイント情報 -->
+        <p id="modalInfo"></p>
+        <!-- 調整単位選択 -->
+        <div class="mb-3">
+          <label for="unitSelect" class="form-label">調整単位</label>
+          <select id="unitSelect" class="form-select">
+            <option value="1">1万円</option>
+            <option value="10" selected>10万円</option>
+            <option value="100">100万円</option>
+          </select>
+        </div>
+        <!-- 収入調整操作ボタン -->
+        <div class="d-flex justify-content-around mb-3">
+          <button type="button" class="btn btn-success" id="plusBtn">＋</button>
+          <button type="button" class="btn btn-danger" id="minusBtn">－</button>
+          <button type="button" class="btn btn-warning" id="fixBtn">固定する</button>
+          <button type="button" class="btn btn-info" id="lineBtn">直線接続</button>
+        </div>
+        <!-- 働き方切替ボタン群（btn-sm） -->
+        <div class="d-flex justify-content-around mb-3">
+          <button type="button" class="btn btn-primary btn-sm" id="changeToCompanyBtn">働き方を会社員・公務員に変更</button>
+          <button type="button" class="btn btn-warning btn-sm" id="changeToSelfBtn">働き方を自営業・その他に変更</button>
+        </div>
+        <!-- 統一された「保存する」ボタン（直線接続と働き方変更の両方の変更内容を反映） -->
+        <div class="d-flex justify-content-center mb-3">
+          <button type="button" class="btn btn-success btn-sm" id="saveWorkingStyleBtn">保存する</button>
+        </div>
+        <!-- 直線接続用入力欄 -->
+        <div id="lineInputDiv" class="mb-3" style="display:none;">
+          <label for="lineAgeInput" class="form-label">開始年齢（クリックされた年齢より小さい）</label>
+          <input type="number" class="form-control" id="lineAgeInput" placeholder="例: {{ session.get('age') }}">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span>変更後の値: <span id="newValueDisplay"></span> 万円</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // サーバーから渡された働き方情報を初期値として取得（なければ null）
+  var initial_working_style = {{ session.get('working_style')|tojson or 'null' }};
+  // サーバーから渡された ages, incomes データ
+  var ages = {{ ages|tojson }};
+  var incomes = {{ incomes|tojson }}.map(function(val){ return Math.round(val); });
+  
+  // 初期の収入データのコピー
+  var originalIncomes = incomes.slice();
+  
+  // マーカー色配列：初期は、もし初期の働き方情報があればそれに合わせる。なければセッションの employment_type によって決定する。
+  var markerColors = [];
+  if(initial_working_style !== null) {
+    markerColors = initial_working_style.map(function(ws) {
+      return ws === "company" ? "blue" : "yellow";
+    });
+    while(markerColors.length < ages.length) {
+      markerColors.push(initial_working_style[0] === "company" ? "blue" : "yellow");
+    }
+  } else {
+    var defaultEmploymentType = "{{ session.get('employment_type', 'company') }}";
+    var defaultColor = defaultEmploymentType === "company" ? "blue" : "yellow";
+    for (var i = 0; i < ages.length; i++) {
+      markerColors.push(defaultColor);
+    }
+  }
+  
+  // Plotly データ設定
+  var data = [{
+    x: ages,
+    y: incomes,
+    mode: 'lines+markers',
+    type: 'scatter',
+    marker: { size: 8, color: markerColors }
+  }];
+  var layout = {
+    title: '収入変動シミュレーション',
+    xaxis: { title: '年齢' },
+    yaxis: { title: '収入 (万円)', tickformat: 'd' },
+    dragmode: false,
+    editable: false
+  };
+  
+  var chartDiv = document.getElementById('chart');
+  
+  Plotly.newPlot('chart', data, layout, {displayModeBar: true}).then(function() {
+    document.getElementById('custom_incomes').value = JSON.stringify(originalIncomes);
+    updateWorkingStyleField();
+  });
+  
+  var clickedIndex = null;
+  
+  // モーダル表示用クリックイベント
+  chartDiv.on('plotly_click', function(eventData) {
+    var pt = eventData.points[0];
+    clickedIndex = pt.pointIndex;
+    var currentValue = originalIncomes[clickedIndex];
+    var ageValue = ages[clickedIndex];
+    document.getElementById('modalInfo').textContent = "クリックされた年齢: " + ageValue + "、現在の収入: " + currentValue + " 万円";
+    document.getElementById('newValueDisplay').textContent = currentValue;
+    document.getElementById('lineInputDiv').style.display = "none";
+    var adjustModal = new bootstrap.Modal(document.getElementById('adjustModal'));
+    adjustModal.show();
+  });
+  
+  // hidden フィールド "working_style" 更新関数
+  function updateWorkingStyleField(){
+    var ws = markerColors.map(function(c){ return (c === 'blue' ? "company" : "self"); });
+    document.getElementById('working_style').value = JSON.stringify(ws);
+  }
+  
+  // フォーム送信前にも働き方情報を更新
+  document.getElementById('detailForm').addEventListener('submit', function() {
+    updateWorkingStyleField();
+  });
+  
+  function getUnit() {
+    return parseInt(document.getElementById('unitSelect').value);
+  }
+  
+  document.getElementById('plusBtn').addEventListener('click', function() {
+    if (clickedIndex !== null) {
+      var unit = getUnit();
+      originalIncomes[clickedIndex] += unit;
+      document.getElementById('newValueDisplay').textContent = originalIncomes[clickedIndex];
+      Plotly.restyle(chartDiv, {'y': [originalIncomes]});
+      document.getElementById('custom_incomes').value = JSON.stringify(originalIncomes);
+    }
+  });
+  
+  document.getElementById('minusBtn').addEventListener('click', function() {
+    if (clickedIndex !== null) {
+      var unit = getUnit();
+      originalIncomes[clickedIndex] -= unit;
+      document.getElementById('newValueDisplay').textContent = originalIncomes[clickedIndex];
+      Plotly.restyle(chartDiv, {'y': [originalIncomes]});
+      document.getElementById('custom_incomes').value = JSON.stringify(originalIncomes);
+    }
+  });
+  
+  document.getElementById('fixBtn').addEventListener('click', function() {
+    if (clickedIndex !== null) {
+      var fixedValue = originalIncomes[clickedIndex];
+      for (var i = clickedIndex; i < originalIncomes.length; i++){
+        originalIncomes[i] = fixedValue;
+      }
+      document.getElementById('newValueDisplay').textContent = fixedValue;
+      Plotly.restyle(chartDiv, {'y': [originalIncomes]});
+      document.getElementById('custom_incomes').value = JSON.stringify(originalIncomes);
+    }
+  });
+  
+  document.getElementById('lineBtn').addEventListener('click', function() {
+    document.getElementById('lineInputDiv').style.display = "block";
+  });
+  
+  // 働き方切替ボタン（モーダル内）－色変更のみ
+  document.getElementById('changeToCompanyBtn').addEventListener('click', function(){
+    if(clickedIndex !== null){
+      for (var i = clickedIndex; i < markerColors.length; i++){
+        markerColors[i] = 'blue';
+      }
+      Plotly.restyle(chartDiv, {'marker.color': [markerColors]});
+    }
+  });
+  
+  document.getElementById('changeToSelfBtn').addEventListener('click', function(){
+    if(clickedIndex !== null){
+      for (var i = clickedIndex; i < markerColors.length; i++){
+        markerColors[i] = 'yellow';
+      }
+      Plotly.restyle(chartDiv, {'marker.color': [markerColors]});
+    }
+  });
+  
+  // 統一された「保存する」ボタンで、直線接続の処理も実施する
+  document.getElementById('saveWorkingStyleBtn').addEventListener('click', function(){
+    // 直線接続用入力欄が表示されている場合は、直線補間処理を実施
+    if(document.getElementById('lineInputDiv').style.display !== "none") {
+         var lineAgeInput = document.getElementById('lineAgeInput').value;
+         var startAge = parseInt(lineAgeInput);
+         var selectedAge = ages[clickedIndex];
+         if(isNaN(startAge)) {
+             alert("開始年齢を数値で入力してください。");
+         } else if(startAge >= selectedAge) {
+             alert("開始年齢はクリックされた年齢より小さくなければなりません。");
+         } else {
+             var startIndex = startAge - ages[0];
+             if(startIndex < 0 || startIndex >= clickedIndex) {
+                 alert("有効な開始年齢を入力してください。");
+             } else {
+                 var startValue = originalIncomes[startIndex];
+                 var endValue = originalIncomes[clickedIndex];
+                 var diff = endValue - startValue;
+                 var steps = clickedIndex - startIndex;
+                 for(var i = startIndex; i <= clickedIndex; i++){
+                     var ratio = (i - startIndex) / steps;
+                     originalIncomes[i] = Math.round(startValue + diff * ratio);
+                 }
+                 document.getElementById('newValueDisplay').textContent = originalIncomes[clickedIndex];
+                 Plotly.restyle(chartDiv, {'y': [originalIncomes]});
+                 document.getElementById('custom_incomes').value = JSON.stringify(originalIncomes);
+             }
+         }
+    }
+    updateWorkingStyleField();
+    var adjustModalEl = document.getElementById('adjustModal');
+    var modal = bootstrap.Modal.getInstance(adjustModalEl);
+    modal.hide();
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

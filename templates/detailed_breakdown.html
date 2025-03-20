@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>年度別収支詳細</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+        th, td {
+            border: 1px solid #aaa;
+            padding: 10px;
+            text-align: center;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<div class="container mt-5">
+    <h1>年度別収支詳細</h1>
+    <div>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th></th>
+                    {% for col in df_dict.columns %}
+                        <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row_label in df_dict.index %}
+                    <tr>
+                        {% set bg = "" %}
+                        {% if row_label == "収入合計" %}
+                            {% set bg = "background-color: #ADD8E6;" %}
+                        {% elif row_label == "年間手取り" %}
+                            {% set bg = "background-color: #D0EFFF;" %}
+                        {% elif row_label == "支出合計" %}
+                            {% set bg = "background-color: #FFB6C1;" %}
+                        {% elif row_label == "年間貯蓄" %}
+                            {% set bg = "background-color: #FFFACD;" %}
+                        {% elif row_label == "資産額" %}
+                            {% set bg = "background-color: #98FB98;" %}
+                        {% endif %}
+                        <th style="white-space: nowrap; {{ bg }}">{{ row_label }}</th>
+                        {% for cell in df_dict.data[loop.index0] %}
+                            {% if row_label in ["年間貯蓄", "資産額"] %}
+                                {% set num = cell.replace("万円", "").replace(",", "")|int %}
+                                {% if num <= 0 %}
+                                    <td style="white-space: nowrap; {{ bg }}"><span style="color: red;">{{ cell }}</span></td>
+                                {% else %}
+                                    <td style="white-space: nowrap; {{ bg }}">{{ cell }}</td>
+                                {% endif %}
+                            {% else %}
+                                <td style="white-space: nowrap; {{ bg }}">{{ cell }}</td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <a href="{{ url_for('simulate') }}" class="btn btn-secondary">戻る</a>
+</div>
+</body>
+</html>
